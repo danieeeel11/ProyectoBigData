@@ -26,6 +26,7 @@ Para ver el historial de corridas (la evidencia visual que pide el docente):
 """
 
 from pathlib import Path
+import shutil
 import zipfile
 
 import requests
@@ -74,8 +75,21 @@ def descargar_mes(año: int, mes: int) -> Path:
 
 @task(name="validar_y_convertir")
 def validar_y_convertir(zip_path: Path) -> dict:
-    """Valida el esquema contra las columnas clave y escribe a Parquet particionado."""
+    """Convierte cada mes una sola vez y permite retomar una ejecución interrumpida."""
     logger = get_run_logger()
+
+    año, mes = map(int, zip_path.stem.rsplit("_", 2)[-2:])
+    particion = CARPETA_PARQUET / f"Year={año}" / f"Month={mes}"
+    marca = particion / "_completado"
+
+    if marca.exists() and list(particion.glob("*.parquet")):
+        logger.info(f"{año}-{mes:02d} ya estaba convertido — se omite")
+        return {"archivo": zip_path.name, "estado": "omitido"}
+
+    # Si una ejecución se interrumpió antes de terminar este mes,
+    # se reconstruye únicamente esa partición.
+    if particion.exists():
+        shutil.rmtree(particion)
 
     with zipfile.ZipFile(zip_path) as z:
         nombre_csv = [n for n in z.namelist() if n.lower().endswith(".csv")][0]
@@ -88,10 +102,19 @@ def validar_y_convertir(zip_path: Path) -> dict:
 
     CARPETA_PARQUET.mkdir(parents=True, exist_ok=True)
     tabla = pa.Table.from_pandas(df, preserve_index=False)
-    pq.write_to_dataset(tabla, root_path=str(CARPETA_PARQUET), partition_cols=["Year", "Month"])
+    pq.write_to_dataset(
+        tabla,
+        root_path=str(CARPETA_PARQUET),
+        partition_cols=["Year", "Month"],
+    )
 
+    marca.write_text("ok", encoding="utf-8")
     logger.info(f"{zip_path.name}: {len(df):,} filas convertidas a Parquet")
-    return {"archivo": zip_path.name, "filas": len(df), "columnas_faltantes": sorted(faltantes)}
+    return {
+        "archivo": zip_path.name,
+        "filas": len(df),
+        "columnas_faltantes": sorted(faltantes),
+    }
 
 
 @task(name="recalcular_analitica")
