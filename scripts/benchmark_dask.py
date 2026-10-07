@@ -1,300 +1,245 @@
-# ============================================================
-# BENCHMARK CON DASK
-# Proyecto Big Data - BTS On-Time Performance
-# ============================================================
+"""
+Benchmark de Dask: CO2 de rodaje por aeropuerto, hora, mes.
 
-from pathlib import Path
+Hace la misma agregación con al menos dos configuraciones de workers,
+hilos y memoria. Las sumas de CO2 tienen que coincidir entre sí y con
+DuckDB. Si no coinciden, el script se detiene: no se compara velocidad
+de dos resultados distintos.
+
+La máquina de referencia tiene 12 núcleos y unos 16 GB de RAM.
+La configuración C (4 workers x 2 GB) solo corre si hay al menos 8 GB
+libres, para no dejar el equipo sin memoria.
+
+Uso (Anaconda Prompt, carpeta del proyecto):
+    conda activate bigdata
+    python scripts/benchmark_dask.py
+
+Para tomar capturas del dashboard, agrega --pausa. El script espera
+a que pulses ENTER antes y después de cada configuración.
+
+El resultado queda en data/resultados/benchmark_dask.csv.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import threading
 import time
+from pathlib import Path
 
+import duckdb
 import pandas as pd
-import dask.dataframe as dd
+import psutil
 from dask.distributed import Client, LocalCluster
 
+RAIZ = Path(__file__).resolve().parent.parent
+if str(RAIZ) not in sys.path:
+    sys.path.insert(0, str(RAIZ))
 
-# ============================================================
-# 1. RUTAS DEL PROYECTO
-# ============================================================
+import config
 
-CARPETA_PARQUET = Path("data/parquet")
-CARPETA_RESULTADOS = Path("data/resultados")
-
-# Creamos la carpeta de resultados si todavía no existe
-CARPETA_RESULTADOS.mkdir(parents=True, exist_ok=True)
+CARPETA_PARQUET = config.CARPETA_PARQUET
+CARPETA_RESULTADOS = config.CARPETA_RESULTADOS
 
 
-# ============================================================
-# 2. FUNCIÓN QUE EJECUTA UNA CONFIGURACIÓN DE DASK
-# ============================================================
+def memoria_arbol_mb() -> float:
+    """RAM del proceso de Python y de los workers que haya lanzado."""
+    yo = psutil.Process()
+    total = 0
+    procesos = [yo]
+    try:
+        procesos.extend(yo.children(recursive=True))
+    except psutil.Error:
+        pass
+    for proceso in procesos:
+        try:
+            total += proceso.memory_info().rss
+        except psutil.Error:
+            continue
+    return total / (1024 * 1024)
+
+
+def suma_co2_duckdb() -> tuple[float, int]:
+    """La misma cuenta, en DuckDB, para comprobar que Dask no cambió el resultado."""
+    tope = config.TAXI_MAX_MIN
+    factor = config.CONSUMO_KG_MIN_BAJO * config.FACTOR_CO2 / 1000.0
+    con = duckdb.connect()
+    fila = con.execute(
+        f"""
+        WITH base AS (
+            SELECT
+                Origin,
+                Year,
+                Month,
+                CASE
+                    WHEN CRSDepTime = 2400 THEN 0
+                    WHEN CRSDepTime BETWEEN 0 AND 2359 THEN CRSDepTime // 100
+                    ELSE NULL
+                END AS hora,
+                TaxiOut
+            FROM read_parquet('{config.patron_parquet()}', hive_partitioning = true)
+            WHERE TaxiOut IS NOT NULL AND TaxiOut <= {tope}
+        )
+        SELECT
+            COUNT(*)::BIGINT AS grupos,
+            SUM(minutos) * {factor} AS co2_t_bajo
+        FROM (
+            SELECT SUM(TaxiOut) AS minutos
+            FROM base
+            WHERE hora IS NOT NULL
+            GROUP BY Origin, Year, Month, hora
+        )
+        """
+    ).fetchone()
+    con.close()
+    return float(fila[1]), int(fila[0])
+
 
 def ejecutar_benchmark(
-    nombre_configuracion,
-    n_workers,
-    threads_por_worker,
-    memoria_por_worker
-):
-    """
-    Ejecuta la misma consulta utilizando una configuración específica
-    de Dask y mide cuánto tiempo tarda.
-
-    Parámetros:
-    - nombre_configuracion: nombre que aparecerá en consola.
-    - n_workers: cantidad de procesos de Dask.
-    - threads_por_worker: cantidad de hilos de cada worker.
-    - memoria_por_worker: memoria disponible para cada worker.
-    """
-
+    nombre_configuracion: str,
+    n_workers: int,
+    threads_por_worker: int,
+    memoria_por_worker: str,
+    pausa: bool,
+) -> dict:
     print("\n" + "=" * 60)
     print(f"Configuración: {nombre_configuracion}")
     print("=" * 60)
-
-    # --------------------------------------------------------
-    # 3. CREAR EL CLUSTER LOCAL DE DASK
-    # --------------------------------------------------------
 
     cluster = LocalCluster(
         n_workers=n_workers,
         threads_per_worker=threads_por_worker,
         memory_limit=memoria_por_worker,
-        dashboard_address=":8787"
+        dashboard_address=":8787",
     )
-
-    # El Client conecta Python con el cluster que acabamos de crear
     client = Client(cluster)
+    print(f"\nDashboard de Dask: {client.dashboard_link}")
 
-    print(
-        f"\nDashboard de Dask: {client.dashboard_link}"
-    )
+    if pausa:
+        print("\nAbre ese enlace en el navegador y déjalo visible.")
+        input("Cuando lo tengas abierto, presiona ENTER para calcular...")
 
-    # --------------------------------------------------------
-    # PAUSA 1:
-    # Te permite abrir el Dashboard ANTES de que comience el cálculo.
-    # --------------------------------------------------------
+    import dask.dataframe as dd
 
-    print("\nIMPORTANTE:")
-    print("1. Copia el enlace del Dashboard.")
-    print("2. Ábrelo en Chrome.")
-    print("3. Deja el navegador abierto.")
-    print("4. Regresa a esta terminal.")
-
-    input(
-        "\nCuando tengas abierto el Dashboard, "
-        "presiona ENTER para comenzar el benchmark..."
-    )
-
-    # --------------------------------------------------------
-    # 4. LEER LOS ARCHIVOS PARQUET
-    # --------------------------------------------------------
-
-    # Dask NO carga todo inmediatamente.
-    # Primero construye un plan de trabajo.
     df = dd.read_parquet(
         str(CARPETA_PARQUET),
-        engine="pyarrow"
+        engine="pyarrow",
+        columns=["Origin", "Year", "Month", "CRSDepTime", "TaxiOut"],
     )
+    tope = config.TAXI_MAX_MIN
+    df = df[df["TaxiOut"].notnull() & (df["TaxiOut"] <= tope)]
+    hora = (df["CRSDepTime"] // 100).astype("Int64")
+    hora = hora.mask(df["CRSDepTime"] == 2400, 0)
+    df = df.assign(hora=hora)
+    df = df[df["hora"].notnull() & (df["CRSDepTime"] >= 0) & (df["CRSDepTime"] <= 2400)]
 
-    # Solamente dejamos las columnas necesarias
-    columnas = [
-        "Year",
-        "Month",
-        "Reporting_Airline",
-        "ArrDel15"
-    ]
+    resumen = df.groupby(["Origin", "Year", "Month", "hora"])["TaxiOut"].agg(["sum", "count"])
 
-    df = df[columnas]
+    pico = {"mb": 0.0}
+    parar = threading.Event()
 
-    # --------------------------------------------------------
-    # 5. INICIAR CRONÓMETRO
-    # --------------------------------------------------------
+    def vigilar():
+        while not parar.is_set():
+            pico["mb"] = max(pico["mb"], memoria_arbol_mb())
+            parar.wait(0.25)
 
+    hilo = threading.Thread(target=vigilar, daemon=True)
+    hilo.start()
     inicio = time.perf_counter()
-
-    # --------------------------------------------------------
-    # 6. ANALÍTICA DISTRIBUIDA
-    # --------------------------------------------------------
-
-    # Primero agrupamos por:
-    # año, mes y aerolínea.
-    #
-    # Después calculamos:
-    # - cantidad de vuelos
-    # - cantidad de vuelos atrasados
-
-    resumen = (
-        df.groupby(
-            ["Year", "Month", "Reporting_Airline"]
-        )
-        .agg(
-            {
-                "ArrDel15": ["count", "sum"]
-            }
-        )
-    )
-
-    # --------------------------------------------------------
-    # 7. .compute()
-    # --------------------------------------------------------
-
-    # Esta es una de las líneas más importantes.
-    #
-    # Hasta aquí Dask solamente había preparado el trabajo.
-    # .compute() hace que los workers empiecen realmente
-    # a procesar los archivos Parquet.
-    #
-    # EN ESTE MOMENTO puedes mirar el Dashboard.
-
     resultado = resumen.compute()
+    segundos = round(time.perf_counter() - inicio, 1)
+    parar.set()
+    hilo.join(timeout=1)
 
-    # --------------------------------------------------------
-    # 8. TERMINAR CRONÓMETRO
-    # --------------------------------------------------------
-
-    fin = time.perf_counter()
-
-    segundos = round(fin - inicio, 1)
-
-    # Dejamos el DataFrame nuevamente como una tabla normal
     resultado = resultado.reset_index()
-
-    # Cambiamos los nombres de las columnas
     resultado.columns = [
-        "Year",
-        "Month",
-        "Reporting_Airline",
-        "vuelos",
-        "vuelos_atrasados"
+        "aeropuerto", "anio", "mes", "hora", "min_rodaje_salida", "vuelos",
     ]
+    factor = config.CONSUMO_KG_MIN_BAJO * config.FACTOR_CO2 / 1000.0
+    suma_co2 = float(resultado["min_rodaje_salida"].sum() * factor)
 
-    # Calculamos el porcentaje de vuelos atrasados
-    resultado["pct_atrasados"] = (
-        100
-        * resultado["vuelos_atrasados"]
-        / resultado["vuelos"]
-    ).round(2)
-
-    print("\nProceso terminado.")
-    print(f"Tiempo total:      {segundos} segundos")
+    print(f"Tiempo:            {segundos} s")
     print(f"Filas resultado:   {len(resultado)}")
+    print(f"CO2 escenario bajo:{suma_co2:,.1f} t")
+    print(f"Memoria observada: {pico['mb']:,.0f} MB")
 
-    # --------------------------------------------------------
-    # PAUSA 2:
-    # El cluster NO se cierra todavía.
-    #
-    # Aquí puedes tomar tu captura tranquilamente.
-    # --------------------------------------------------------
+    if pausa:
+        print("\nEl dashboard sigue abierto. Toma la captura ahora.")
+        input("Cuando tengas la captura, presiona ENTER para cerrar esta configuración...")
 
-    print("\n" + "-" * 60)
-    print("EL DASHBOARD SIGUE ACTIVO")
-    print("-" * 60)
-
-    print("\nAhora:")
-    print("1. Vuelve al navegador.")
-    print("2. Toma la captura del Dashboard.")
-    print("3. Guarda la imagen.")
-    print("4. Regresa a Anaconda Prompt.")
-
-    input(
-        "\nCuando ya tengas la captura, "
-        "presiona ENTER para cerrar esta configuración..."
-    )
-
-    # --------------------------------------------------------
-    # 9. CERRAR DASK ORDENADAMENTE
-    # --------------------------------------------------------
-
-    # Primero cerramos el cliente
     client.close()
-
-    # Después cerramos el cluster
     cluster.close()
-
-    # --------------------------------------------------------
-    # 10. DEVOLVER RESULTADO DEL BENCHMARK
-    # --------------------------------------------------------
 
     return {
         "configuracion": nombre_configuracion,
-        "n_workers": n_workers,
-        "threads_por_worker": threads_por_worker,
+        "workers": n_workers,
+        "hilos": threads_por_worker,
         "memoria_por_worker": memoria_por_worker,
         "segundos": segundos,
-        "filas_resultado": len(resultado)
+        "pico_memoria_mb": round(pico["mb"], 1),
+        "filas_resultado": len(resultado),
+        "suma_co2_t_bajo": round(suma_co2, 3),
     }
 
 
-# ============================================================
-# 11. PROGRAMA PRINCIPAL
-# ============================================================
+def main():
+    parser = argparse.ArgumentParser(description="Benchmark Dask del CO2 de rodaje")
+    parser.add_argument(
+        "--pausa",
+        action="store_true",
+        help="Espera ENTER para que puedas capturar el dashboard",
+    )
+    args = parser.parse_args()
+
+    print(f"Núcleos lógicos: {os.cpu_count()}")
+    libre_gb = psutil.virtual_memory().available / 1e9
+    print(f"RAM libre ahora: {libre_gb:.1f} GB")
+
+    CARPETA_RESULTADOS.mkdir(parents=True, exist_ok=True)
+    referencia, grupos_duck = suma_co2_duckdb()
+    print(f"Referencia DuckDB: {referencia:,.1f} t de CO2 en {grupos_duck} grupos")
+
+    configuraciones = [
+        ("Config A — 2 workers x 2 hilos, 2GB cada uno", 2, 2, "2GB"),
+        ("Config B — 4 workers x 1 hilo, 1GB cada uno", 4, 1, "1GB"),
+    ]
+    if libre_gb >= 8:
+        configuraciones.append(
+            ("Config C — 4 workers x 2 hilos, 2GB cada uno", 4, 2, "2GB")
+        )
+    else:
+        print(
+            "\nConfig C no se corre: pide unos 8 GB libres y ahora hay "
+            f"{libre_gb:.1f} GB. Con A y B ya se cumplen las dos configuraciones."
+        )
+
+    filas = []
+    for nombre, workers, hilos, memoria in configuraciones:
+        filas.append(ejecutar_benchmark(nombre, workers, hilos, memoria, args.pausa))
+
+    tabla = pd.DataFrame(filas)
+    sumas = tabla["suma_co2_t_bajo"].round(1)
+    if sumas.nunique() != 1:
+        raise SystemExit(
+            "Las configuraciones de Dask no dieron el mismo CO2.\n" + tabla.to_string(index=False)
+        )
+    if abs(float(sumas.iloc[0]) - round(referencia, 1)) > 1:
+        raise SystemExit(
+            f"Dask ({sumas.iloc[0]} t) no coincide con DuckDB ({referencia:.1f} t)."
+        )
+
+    destino = CARPETA_RESULTADOS / "benchmark_dask.csv"
+    tabla.to_csv(destino, index=False)
+
+    print("\n" + "=" * 60)
+    print("COMPARACIÓN FINAL — el CO2 coincide en todas")
+    print("=" * 60)
+    print(tabla.to_string(index=False))
+    print(f"\nGuardado en {destino}")
+    print("Misma suma de CO2 que DuckDB: sí.")
+
 
 if __name__ == "__main__":
-
-    resultados_benchmark = []
-
-    # ========================================================
-    # CONFIGURACIÓN A
-    # ========================================================
-
-    resultado_a = ejecutar_benchmark(
-        nombre_configuracion="Config A — 2 workers x 2 hilos, 2GB cada uno",
-        n_workers=2,
-        threads_por_worker=2,
-        memoria_por_worker="2GB"
-    )
-
-    resultados_benchmark.append(resultado_a)
-
-    # ========================================================
-    # CONFIGURACIÓN B
-    # ========================================================
-
-    resultado_b = ejecutar_benchmark(
-        nombre_configuracion="Config B — 4 workers x 1 hilo, 1GB cada uno",
-        n_workers=4,
-        threads_por_worker=1,
-        memoria_por_worker="1GB"
-    )
-
-    resultados_benchmark.append(resultado_b)
-
-    # ========================================================
-    # 12. TABLA FINAL
-    # ========================================================
-
-    tabla_resultados = pd.DataFrame(resultados_benchmark)
-
-    print("\n")
-    print("=" * 60)
-    print("COMPARACIÓN FINAL")
-    print("=" * 60)
-
-    print(
-        tabla_resultados[
-            [
-                "configuracion",
-                "n_workers",
-                "threads_por_worker",
-                "memoria_por_worker",
-                "segundos",
-                "filas_resultado"
-            ]
-        ].to_string(index=False)
-    )
-
-    # ========================================================
-    # 13. GUARDAR RESULTADOS EN CSV
-    # ========================================================
-
-    archivo_salida = (
-        CARPETA_RESULTADOS
-        / "benchmark_dask.csv"
-    )
-
-    tabla_resultados.to_csv(
-        archivo_salida,
-        index=False
-    )
-
-    print(
-        f"\nResultados guardados en: {archivo_salida}"
-    )
-
-    print("\nBenchmark finalizado correctamente.")
+    main()

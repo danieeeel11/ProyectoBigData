@@ -1,1 +1,31 @@
-/data
+# Datos grandes de entrada y Parquet por vuelo.
+# Los CSV pequeños de data/resultados/ y data/clima/ SÍ se pueden subir.
+data/raw/
+data/parquet/
+data/clima/*.parquet
+*.zip
+*.parquet
+*.pkl
+
+# Credenciales
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Archivos temporales
+*.tmp
+*.log
+.DS_Store
+Thumbs.db

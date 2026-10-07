@@ -9,8 +9,8 @@ para los 20 aeropuertos de origen seleccionados.
 Importante:
 - Este script NO descarga clima por hora.
 - Descarga clima agregado por día.
-- Por eso sirve como información contextual para analizar si los días
-  con más lluvia, nieve o viento presentan diferencias en los atrasos.
+- Por eso sirve como información contextual para ver si los días
+  con más lluvia, nieve o viento alargan el rodaje de salida.
 - No debe interpretarse como el clima exacto en el momento de salida
   de cada vuelo.
 
@@ -301,8 +301,7 @@ def main():
     print()
     print(
         "Este archivo contiene clima DIARIO. "
-        "Se utilizará como información contextual "
-        "para analizar asociaciones con los atrasos."
+        "Se utiliza como contexto del tiempo de rodaje de salida."
     )
 
 
