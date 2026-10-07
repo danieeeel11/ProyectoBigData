@@ -20,6 +20,6 @@ Tiempos observados en esta máquina (12 núcleos, 16 GB de RAM):
 
 - Recalcular todos los agregados de CO2 con DuckDB: alrededor de 15 segundos.
 - Flujo de Prefect sobre los 36 meses ya convertidos: los omite y vuelve a calcular el CO2 en menos de 20 segundos.
-- Dask, misma suma de CO2 de salida (7.042.250,7 t, 128.075 filas, igual a DuckDB): configuración A (2 workers, 2 hilos, 2 GB) en 5,1 s; configuración B (4 workers, 1 hilo, 1 GB) en 9,6 s. La C no corrió porque solo había 4,1 GB libres. El benchmark viejo de atrasos (6,6 s y 12,9 s) quedó en `benchmark_dask_atrasos.csv`.
+- Dask, misma suma de CO2 de salida (7.042.250,7 t, 128.075 filas, igual a DuckDB): configuración A (2 workers, 2 hilos, 2 GB) en 5,1 s; configuración B (4 workers, 1 hilo, 1 GB) en 9,6 s. La C no corrió porque solo había 4,1 GB libres.
 
 La reducción de 9,47 GB a unos miles de filas es una agregación justificada: la pregunta se responde por aeropuerto, hora y mes, no vuelo por vuelo. El conteo de 20.928.579 filas demuestra que el cálculo partió del conjunto completo.

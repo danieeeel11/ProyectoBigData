@@ -17,9 +17,7 @@ Uso (Anaconda Prompt, carpeta del proyecto):
 Para tomar capturas del dashboard, agrega --pausa. El script espera
 a que pulses ENTER antes y después de cada configuración.
 
-El CSV anterior (enfoque de atrasos, 6,6 s y 12,9 s) quedó guardado en
-data/resultados/benchmark_dask_atrasos.csv. Este script vuelve a escribir
-data/resultados/benchmark_dask.csv con el cálculo de CO2.
+El resultado queda en data/resultados/benchmark_dask.csv.
 """
 
 from __future__ import annotations

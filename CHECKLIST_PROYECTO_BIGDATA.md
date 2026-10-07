@@ -4,7 +4,7 @@ Universidad de La Sabana, Maestría en Analítica Aplicada.
 Presentación: **10 de octubre de 2026**. Entrega del documento: **17 de octubre de 2026**.  
 Pregunta vigente: ¿qué aeropuertos y qué horas desperdician más combustible en rodaje, y cuánto CO2 es eso?
 
-El enfoque de atrasos (`ArrDel15`) queda como material de apoyo. Este checklist sigue la pregunta nueva.
+Este checklist sigue la pregunta de rodaje y CO2.
 
 | Punto | Qué pide el docente | Estado al 6 de octubre | Quién cierra la evidencia |
 |---|---|---|---|

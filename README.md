@@ -8,7 +8,7 @@ Proyecto de Big Data, Maestría en Analítica Aplicada, Universidad de La Sabana
 
 **Unidad de análisis:** un vuelo. Los resultados se agregan por aeropuerto, hora y mes.
 
-El trabajo anterior (predecir atrasos con `ArrDel15`) sigue en el repositorio como material de apoyo. La pregunta vigente es el CO2 del rodaje.
+La pregunta del proyecto es el CO2 del rodaje.
 
 ## Cómo se calcula
 
@@ -113,8 +113,6 @@ scripts/medir_volumen_entrada.py   1,05 GB y 9,47 GB
 scripts/descargar_clima_openmeteo.py
 docs/                              guía AWS, paneles, volúmenes, informe, registro de IA
 ```
-
-En la raíz siguen los notebooks del enfoque de atrasos. No responden la pregunta nueva.
 
 ## Resultado corto
 

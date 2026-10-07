@@ -53,7 +53,7 @@ Se marcó como rodaje excesivo de salida el vuelo que supera el percentil 90 de 
 
 ## Prefect
 
-El flujo `ingesta-y-analitica-bts` descarga el mes solo si el ZIP no está, convierte a Parquet solo si ese mes no está marcado como listo, y al final recalcula el CO2 sobre **todo** el Parquet. Una corrida del 6 de octubre de 2026 omitió los 36 meses y dejó 12.164 filas de aeropuerto-mes, 5.169 de aeropuerto-hora y 3 de resumen anual. También actualizó el resumen viejo de atrasos (528 filas), para no perderlo.
+El flujo `ingesta-y-analitica-bts` descarga el mes solo si el ZIP no está, convierte a Parquet solo si ese mes no está marcado como listo, y al final recalcula el CO2 sobre **todo** el Parquet. Una corrida del 6 de octubre de 2026 omitió los 36 meses y dejó 12.164 filas de aeropuerto-mes, 5.169 de aeropuerto-hora y 3 de resumen anual.
 
 Si el ZIP está corrupto o al CSV le faltan `TaxiOut` o `TaxiIn`, el flujo lo escribe en el log y sigue. No borra las particiones buenas ni reemplaza los CSV hasta que el cálculo nuevo termina. Esa prueba se corre con `demostrar_fallo=True`.
 
@@ -66,7 +66,7 @@ La misma agregación (CO2 de salida por aeropuerto, hora, año y mes) se corrió
 | A: 2 workers, 2 hilos, 2 GB cada uno | 5,1 s | 2.018 MB |
 | B: 4 workers, 1 hilo, 1 GB cada uno | 9,6 s | 2.441 MB |
 
-Otra vez ganó la configuración con menos procesos. En B un worker llegó al 82 % de su límite de 1 GB y Dask lo pausó. Con este tamaño pesa más coordinar procesos que calcular. La configuración C (4 × 2 GB) no se corrió: había 4,1 GB libres y el script pide al menos 8 GB para no dejar el equipo sin memoria. El archivo del benchmark viejo de atrasos (6,6 s y 12,9 s) se conservó como `benchmark_dask_atrasos.csv`.
+Otra vez ganó la configuración con menos procesos. En B un worker llegó al 82 % de su límite de 1 GB y Dask lo pausó. Con este tamaño pesa más coordinar procesos que calcular. La configuración C (4 × 2 GB) no se corrió: había 4,1 GB libres y el script pide al menos 8 GB para no dejar el equipo sin memoria.
 
 ## Clima
 

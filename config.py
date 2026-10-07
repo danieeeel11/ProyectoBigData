@@ -31,7 +31,7 @@ TAXI_MAX_MIN = 180
 ANIOS = (2023, 2024, 2025)
 MESES = tuple(range(1, 13))
 
-# Umbrales del cruce con clima (los mismos del análisis anterior de atrasos).
+# Umbrales del cruce con clima.
 LLUVIA_FUERTE_MM = 5.0
 VIENTO_FUERTE_KMH = 40.0
 

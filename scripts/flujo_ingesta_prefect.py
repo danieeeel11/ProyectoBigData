@@ -5,14 +5,11 @@ Qué se conservó del flujo anterior:
   - descargar_mes: si el ZIP ya está, no lo vuelve a bajar.
   - validar_y_convertir: si el mes ya está en Parquet, lo omite.
 
-Qué se agregó para la pregunta nueva (combustible y CO2):
+Qué calcula:
   - limpiar_rodaje: cuenta nulos y atípicos, sin borrar el Parquet.
   - calcular_co2: arma las tablas con el consumo en kg/min que le pases.
   - agregar_resultados: guarda los CSV. Si esta tarea no llega a correr,
     los CSV anteriores quedan intactos.
-
-También sigue recalculando el resumen de atrasos, para no perder el
-trabajo del enfoque anterior.
 
 Fallo controlado (Unidad 4):
   Con demostrar_fallo=True el flujo prueba un ZIP corrupto y un esquema
@@ -39,7 +36,6 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import requests
-import duckdb
 
 from prefect import flow, task, get_run_logger
 
@@ -56,7 +52,6 @@ from calcular_co2 import (
 
 CARPETA_RAW = Path("data/raw")
 CARPETA_PARQUET = Path("data/parquet")
-CARPETA_RESULTADOS = Path("data/resultados")
 
 URL_BASE = (
     "https://transtats.bts.gov/PREZIP/"
@@ -198,37 +193,6 @@ def agregar_resultados(tablas: dict) -> dict:
     return {nombre: str(ruta) for nombre, ruta in rutas.items()}
 
 
-@task(name="recalcular_analitica_atrasos")
-def recalcular_analitica() -> int:
-    """
-    Resumen del enfoque anterior (atrasos). Se mantiene para no perderlo.
-    La pregunta vigente del proyecto es el CO2 del rodaje, no ArrDel15.
-    """
-    logger = get_run_logger()
-    CARPETA_RESULTADOS.mkdir(parents=True, exist_ok=True)
-
-    con = duckdb.connect()
-    resumen = con.execute(
-        f"""
-        SELECT
-            Year, Month, Reporting_Airline,
-            COUNT(*) AS vuelos,
-            ROUND(100.0 * SUM(CASE WHEN ArrDel15 = 1 THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct_atrasados
-        FROM read_parquet('{config.patron_parquet()}', hive_partitioning = true)
-        GROUP BY Year, Month, Reporting_Airline
-        ORDER BY Year, Month, Reporting_Airline
-        """
-    ).fetchdf()
-    con.close()
-
-    salida = CARPETA_RESULTADOS / "resumen_atrasos_por_aerolinea_mes.csv"
-    temporal = salida.with_suffix(".csv.tmp")
-    resumen.to_csv(temporal, index=False)
-    temporal.replace(salida)
-    logger.info(f"Resumen de atrasos (enfoque anterior): {len(resumen)} filas en {salida}")
-    return len(resumen)
-
-
 @task(name="demostrar_fallo_controlado")
 def demostrar_fallo_controlado() -> dict:
     """
@@ -297,14 +261,12 @@ def flujo_ingesta_bts(
     calidad = limpiar_rodaje()
     tablas = calcular_co2(consumo_kg_min)
     rutas = agregar_resultados(tablas)
-    filas_atrasos = recalcular_analitica()
 
     return {
         "fallo_controlado": fallo,
         "reportes_ingesta": reportes,
         "vuelos_validos": calidad.get("vuelos_validos"),
         "archivos_co2": rutas,
-        "filas_resumen_atrasos": filas_atrasos,
     }
 
 

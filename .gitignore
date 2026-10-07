@@ -2,6 +2,7 @@
 # Los CSV pequeños de data/resultados/ y data/clima/ SÍ se pueden subir.
 data/raw/
 data/parquet/
+data/clima/*.parquet
 *.zip
 *.parquet
 *.pkl
@@ -28,6 +29,3 @@ env/
 *.log
 .DS_Store
 Thumbs.db
-
-# Versión anterior del script de AWS (la vigente es scripts/subir_resultados_aws.py)
-scripts/cargar_aws.py
