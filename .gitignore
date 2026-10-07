@@ -1,1 +1,30 @@
 /data
+# Datos grandes que NO deben subirse
+data/raw/
+data/parquet/
+
+# Credenciales
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Archivos temporales
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# Script local que no debe subirse
+scripts/cargar_aws.py
