@@ -1,41 +1,58 @@
 """
-Flujo de ingesta y analítica recurrente — BTS On-Time Performance
-==================================================================
+Flujo de ingesta y analítica de rodaje / CO2 — BTS On-Time Performance.
 
-Requisito del docente (punto 1.d): un flujo con Prefect que, si llega
-un conjunto de datos similar o adicional, transforme y recalcule la
-analítica de nuevo, sin reescribir el pipeline.
+Qué se conservó del flujo anterior:
+  - descargar_mes: si el ZIP ya está, no lo vuelve a bajar.
+  - validar_y_convertir: si el mes ya está en Parquet, lo omite.
 
-Cómo cumple esto este script:
-  - Cada mes se identifica por (año, mes). Si ya fue descargado y
-    convertido, el flujo lo detecta y lo omite (idempotente).
-  - Para procesar datos nuevos, se vuelve a llamar el flujo con la
-    lista de periodos AMPLIADA (ver el bloque `if __name__ == "__main__"`
-    al final) — no hay que tocar el código de las tareas.
-  - El último paso del flujo siempre recalcula la analítica agregada
-    sobre TODO lo que haya en /data/parquet, así que el resultado
-    queda actualizado automáticamente con los datos viejos + nuevos.
+Qué se agregó para la pregunta nueva (combustible y CO2):
+  - limpiar_rodaje: cuenta nulos y atípicos, sin borrar el Parquet.
+  - calcular_co2: arma las tablas con el consumo en kg/min que le pases.
+  - agregar_resultados: guarda los CSV. Si esta tarea no llega a correr,
+    los CSV anteriores quedan intactos.
 
-Antes de correrlo (en el ambiente conda "bigdata"):
-    conda activate bigdata
-    pip install prefect duckdb pyarrow requests
+También sigue recalculando el resumen de atrasos, para no perder el
+trabajo del enfoque anterior.
 
-Para ver el historial de corridas (la evidencia visual que pide el docente):
-    Terminal 1:  prefect server start        (deja esto corriendo, abre localhost:4200)
-    Terminal 2:  python scripts/flujo_ingesta_prefect.py
+Fallo controlado (Unidad 4):
+  Con demostrar_fallo=True el flujo prueba un ZIP corrupto y un esquema
+  sin TaxiOut/TaxiIn. Los detecta, los escribe en el log y sigue.
+  No toca los Parquet buenos ni reemplaza los CSV hasta el final.
+
+Antes de correrlo (Anaconda Prompt, carpeta del proyecto):
+  conda activate bigdata
+
+  Terminal 1:  prefect server start
+  Terminal 2:  python scripts/flujo_ingesta_prefect.py
+
+La segunda corrida de evidencia (un mes nuevo, los demás omitidos)
+está comentada al final de este archivo.
 """
 
 from pathlib import Path
 import shutil
+import sys
+import tempfile
 import zipfile
 
-import requests
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import requests
 import duckdb
 
 from prefect import flow, task, get_run_logger
+
+RAIZ = Path(__file__).resolve().parent.parent
+if str(RAIZ) not in sys.path:
+    sys.path.insert(0, str(RAIZ))
+
+import config
+from calcular_co2 import (
+    calcular_agregados,
+    escribir_resultados,
+    estadisticas_limpieza,
+)
 
 CARPETA_RAW = Path("data/raw")
 CARPETA_PARQUET = Path("data/parquet")
@@ -46,9 +63,12 @@ URL_BASE = (
     "On_Time_Reporting_Carrier_On_Time_Performance_1987_present_{year}_{month}.zip"
 )
 
+# TaxiOut y TaxiIn se exigen porque sin ellos no hay pregunta de rodaje.
+# Si faltan, el mes se rechaza ANTES de borrar o escribir Parquet.
 COLUMNAS_ESPERADAS = {
     "Year", "Month", "Reporting_Airline", "Origin", "Dest",
     "ArrDel15", "DepDelay", "ArrDelay",
+    "TaxiOut", "TaxiIn", "CRSDepTime",
 }
 
 
@@ -75,7 +95,7 @@ def descargar_mes(año: int, mes: int) -> Path:
 
 @task(name="validar_y_convertir")
 def validar_y_convertir(zip_path: Path) -> dict:
-    """Convierte cada mes una sola vez y permite retomar una ejecución interrumpida."""
+    """Convierte cada mes una sola vez. Un esquema malo no borra lo ya convertido."""
     logger = get_run_logger()
 
     año, mes = map(int, zip_path.stem.rsplit("_", 2)[-2:])
@@ -86,19 +106,32 @@ def validar_y_convertir(zip_path: Path) -> dict:
         logger.info(f"{año}-{mes:02d} ya estaba convertido — se omite")
         return {"archivo": zip_path.name, "estado": "omitido"}
 
-    # Si una ejecución se interrumpió antes de terminar este mes,
-    # se reconstruye únicamente esa partición.
-    if particion.exists():
-        shutil.rmtree(particion)
-
-    with zipfile.ZipFile(zip_path) as z:
-        nombre_csv = [n for n in z.namelist() if n.lower().endswith(".csv")][0]
-        with z.open(nombre_csv) as f:
-            df = pd.read_csv(f, low_memory=False)
+    try:
+        with zipfile.ZipFile(zip_path) as z:
+            nombre_csv = [n for n in z.namelist() if n.lower().endswith(".csv")][0]
+            with z.open(nombre_csv) as f:
+                df = pd.read_csv(f, low_memory=False)
+    except zipfile.BadZipFile:
+        logger.error(
+            f"ZIP corrupto: {zip_path.name}. No se escribió Parquet y no se "
+            "borró ninguna partición existente."
+        )
+        return {"archivo": zip_path.name, "estado": "zip_corrupto"}
 
     faltantes = COLUMNAS_ESPERADAS - set(df.columns)
     if faltantes:
-        logger.warning(f"{zip_path.name}: faltan columnas esperadas {sorted(faltantes)}")
+        logger.error(
+            f"{zip_path.name}: faltan columnas {sorted(faltantes)}. "
+            "El mes se rechaza. El Parquet anterior no se toca."
+        )
+        return {
+            "archivo": zip_path.name,
+            "estado": "esquema_incompleto",
+            "columnas_faltantes": sorted(faltantes),
+        }
+
+    if particion.exists():
+        shutil.rmtree(particion)
 
     CARPETA_PARQUET.mkdir(parents=True, exist_ok=True)
     tabla = pa.Table.from_pandas(df, preserve_index=False)
@@ -112,61 +145,181 @@ def validar_y_convertir(zip_path: Path) -> dict:
     logger.info(f"{zip_path.name}: {len(df):,} filas convertidas a Parquet")
     return {
         "archivo": zip_path.name,
+        "estado": "convertido",
         "filas": len(df),
-        "columnas_faltantes": sorted(faltantes),
     }
 
 
-@task(name="recalcular_analitica")
-def recalcular_analitica() -> pd.DataFrame:
-    """Recalcula el % de atrasos por aerolínea/mes sobre TODO el Parquet disponible."""
+@task(name="limpiar_rodaje")
+def limpiar_rodaje() -> dict:
+    """Mide la calidad del rodaje sobre todo el Parquet. No elimina filas del archivo."""
+    logger = get_run_logger()
+    calidad = estadisticas_limpieza()
+    logger.info(
+        "Limpieza: %(filas)s filas, %(vuelos_validos)s válidas "
+        "(ambos tiempos no nulos y <= 180 min). "
+        "TaxiOut nulo: %(taxiout_nulo)s. TaxiIn nulo: %(taxiin_nulo)s. "
+        "Máximo TaxiOut: %(taxiout_max)s min (se documenta, no se borra del Parquet)."
+        % calidad
+    )
+    return {k: (None if pd.isna(v) else v) for k, v in calidad.items()}
+
+
+@task(name="calcular_co2")
+def calcular_co2(consumo_kg_min: float) -> dict:
+    """
+    Calcula los agregados.
+
+    consumo_kg_min reemplaza el escenario bajo (por defecto 6).
+    El escenario alto sigue saliendo de config.py y queda marcado
+    como "por validar".
+    """
+    logger = get_run_logger()
+    logger.info(
+        f"Consumo del escenario bajo para esta corrida: {consumo_kg_min} kg/min. "
+        f"Escenario alto: {config.CONSUMO_KG_MIN_ALTO} kg/min (por validar). "
+        f"Factor CO2: {config.FACTOR_CO2}."
+    )
+    tablas = calcular_agregados(consumo_bajo=consumo_kg_min)
+    logger.info(
+        "Agregados listos: "
+        + ", ".join(f"{nombre}={len(df)} filas" for nombre, df in tablas.items())
+    )
+    return tablas
+
+
+@task(name="agregar_resultados")
+def agregar_resultados(tablas: dict) -> dict:
+    """Guarda los CSV. Cada archivo se escribe entero y luego se renombra."""
+    logger = get_run_logger()
+    rutas = escribir_resultados(tablas)
+    for nombre, ruta in rutas.items():
+        logger.info(f"Guardado {ruta} ({len(tablas[nombre])} filas)")
+    return {nombre: str(ruta) for nombre, ruta in rutas.items()}
+
+
+@task(name="recalcular_analitica_atrasos")
+def recalcular_analitica() -> int:
+    """
+    Resumen del enfoque anterior (atrasos). Se mantiene para no perderlo.
+    La pregunta vigente del proyecto es el CO2 del rodaje, no ArrDel15.
+    """
     logger = get_run_logger()
     CARPETA_RESULTADOS.mkdir(parents=True, exist_ok=True)
 
     con = duckdb.connect()
-    resumen = con.execute(f"""
+    resumen = con.execute(
+        f"""
         SELECT
             Year, Month, Reporting_Airline,
             COUNT(*) AS vuelos,
             ROUND(100.0 * SUM(CASE WHEN ArrDel15 = 1 THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct_atrasados
-        FROM parquet_scan('{CARPETA_PARQUET}/**/*.parquet')
+        FROM read_parquet('{config.patron_parquet()}', hive_partitioning = true)
         GROUP BY Year, Month, Reporting_Airline
         ORDER BY Year, Month, Reporting_Airline
-    """).fetchdf()
+        """
+    ).fetchdf()
+    con.close()
 
     salida = CARPETA_RESULTADOS / "resumen_atrasos_por_aerolinea_mes.csv"
-    resumen.to_csv(salida, index=False)
-    logger.info(f"Analítica recalculada: {len(resumen)} filas guardadas en {salida}")
-    return resumen
+    temporal = salida.with_suffix(".csv.tmp")
+    resumen.to_csv(temporal, index=False)
+    temporal.replace(salida)
+    logger.info(f"Resumen de atrasos (enfoque anterior): {len(resumen)} filas en {salida}")
+    return len(resumen)
+
+
+@task(name="demostrar_fallo_controlado")
+def demostrar_fallo_controlado() -> dict:
+    """
+    Dos fallos a propósito, en una carpeta temporal.
+    El Parquet real y los CSV no se modifican aquí.
+    """
+    logger = get_run_logger()
+    resultado = {"zip_corrupto": None, "esquema_incompleto": None}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        malo = Path(tmp) / "vacio.zip"
+        malo.write_bytes(b"esto no es un zip")
+        try:
+            with zipfile.ZipFile(malo) as z:
+                z.namelist()
+            logger.error("No se detectó el ZIP corrupto. Revisa el flujo.")
+            resultado["zip_corrupto"] = "no_detectado"
+        except zipfile.BadZipFile:
+            logger.error(
+                "FALLO CONTROLADO detectado: ZIP corrupto. "
+                "El flujo lo registra y continúa. No se escribió Parquet."
+            )
+            resultado["zip_corrupto"] = "detectado"
+
+        incompleto = Path(tmp) / "sin_rodaje.zip"
+        with zipfile.ZipFile(incompleto, "w") as z:
+            z.writestr("vuelos.csv", "Year,Month,Origin\n2023,1,ATL\n")
+        with zipfile.ZipFile(incompleto) as z:
+            with z.open("vuelos.csv") as f:
+                cabecera = f.readline().decode("utf-8")
+        columnas = {c.strip() for c in cabecera.split(",")}
+        faltantes = {"TaxiOut", "TaxiIn"} - columnas
+        if faltantes:
+            logger.error(
+                "FALLO CONTROLADO detectado: esquema sin %s. "
+                "El mes se rechazaría antes de tocar el Parquet. El flujo continúa.",
+                sorted(faltantes),
+            )
+            resultado["esquema_incompleto"] = "detectado"
+        else:
+            resultado["esquema_incompleto"] = "no_detectado"
+
+    return resultado
 
 
 @flow(name="ingesta-y-analitica-bts")
-def flujo_ingesta_bts(periodos: list[tuple[int, int]]):
+def flujo_ingesta_bts(
+    periodos: list[tuple[int, int]],
+    consumo_kg_min: float = config.CONSUMO_KG_MIN_BAJO,
+    demostrar_fallo: bool = False,
+):
     """
-    periodos: lista de tuplas (año, mes) a procesar.
+    periodos: lista de (año, mes).
 
-    Para incorporar datos nuevos (un mes que se acaba de publicar, o un
-    año adicional), se vuelve a llamar este flujo con la lista ampliada.
-    Los periodos ya procesados se detectan y se omiten; la analítica del
-    final siempre se recalcula sobre el total acumulado.
+    Un mes que ya está descargado y convertido se omite.
+    Al final, el CO2 se recalcula sobre TODO el Parquet, no solo sobre el mes nuevo.
     """
+    fallo = demostrar_fallo_controlado() if demostrar_fallo else None
+
     reportes = []
     for año, mes in periodos:
         zip_path = descargar_mes(año, mes)
         reporte = validar_y_convertir(zip_path)
         reportes.append(reporte)
 
-    resumen = recalcular_analitica()
-    return {"reportes_ingesta": reportes, "filas_resumen_analitica": len(resumen)}
+    calidad = limpiar_rodaje()
+    tablas = calcular_co2(consumo_kg_min)
+    rutas = agregar_resultados(tablas)
+    filas_atrasos = recalcular_analitica()
+
+    return {
+        "fallo_controlado": fallo,
+        "reportes_ingesta": reportes,
+        "vuelos_validos": calidad.get("vuelos_validos"),
+        "archivos_co2": rutas,
+        "filas_resumen_atrasos": filas_atrasos,
+    }
 
 
 if __name__ == "__main__":
-    # Corrida base: 2023-2025 completo.
-    periodos_base = [(año, mes) for año in [2023, 2024, 2025] for mes in range(1, 13)]
-    flujo_ingesta_bts(periodos_base)
+    # Corrida base: 2023-2025. Los meses ya convertidos se omiten
+    # y el CO2 se recalcula sobre el Parquet completo.
+    periodos_base = [(año, mes) for año in config.ANIOS for mes in config.MESES]
+    flujo_ingesta_bts(periodos_base, demostrar_fallo=False)
 
-    # Cuando llegue un mes nuevo (ej. BTS publica enero 2026), agregarlo aquí
-    # y volver a correr el script — no hace falta tocar nada más:
+    # Segunda corrida de evidencia (hazla en otra ejecución, no aquí):
+    # agrega un mes que todavía no está. Los 36 anteriores deben decir "omitido".
     #
-    # periodos_actualizados = periodos_base + [(2026, 1)]
-    # flujo_ingesta_bts(periodos_actualizados)
+    # periodos_con_mes_nuevo = periodos_base + [(2026, 1)]
+    # flujo_ingesta_bts(periodos_con_mes_nuevo, demostrar_fallo=False)
+    #
+    # Tercera corrida, solo para la captura del fallo controlado:
+    #
+    # flujo_ingesta_bts(periodos_base, demostrar_fallo=True)

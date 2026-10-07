@@ -1,7 +1,10 @@
-/data
-# Datos grandes que NO deben subirse
+# Datos grandes de entrada y Parquet por vuelo.
+# Los CSV pequeños de data/resultados/ y data/clima/ SÍ se pueden subir.
 data/raw/
 data/parquet/
+*.zip
+*.parquet
+*.pkl
 
 # Credenciales
 .env
@@ -26,5 +29,5 @@ env/
 .DS_Store
 Thumbs.db
 
-# Script local que no debe subirse
+# Versión anterior del script de AWS (la vigente es scripts/subir_resultados_aws.py)
 scripts/cargar_aws.py
