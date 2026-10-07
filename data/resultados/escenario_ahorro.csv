@@ -1,0 +1,3 @@
+concepto,detalle,co2_t_bajo_actual,co2_t_evitado,co2_t_bajo_escenario
+bajar_rodaje_10_porciento,El CO2 baja el mismo 10 % porque el factor es lineal,10303625.339,1030362.534,9273262.805
+salida_lenta_hasta_mediana,Aeropuertos con más de 50000 vuelos de salida cuyo promedio supera la mediana (15.69 min) bajan hasta esa mediana. Solo cuenta el rodaje de salida.,10303625.339,1007868.569,9295756.77
