@@ -40,8 +40,8 @@ else:
     print(f"Tamaño total descomprimido (CSV): {total_descomprimido / 1e9:.2f} GB")
     print()
     if total_descomprimido / 1e9 >= 1.5:
-        print(f"✓ Cumple el mínimo de 1.5 GB exigido por el docente "
+        print(f"OK: cumple el minimo de 1.5 GB exigido por el docente "
               f"({total_descomprimido / 1e9:.2f} GB)")
     else:
-        print(f"✗ NO alcanza el mínimo de 1.5 GB "
-              f"(solo {total_descomprimido / 1e9:.2f} GB) — avísame si sale esto")
+        print(f"NO alcanza el minimo de 1.5 GB "
+              f"(solo {total_descomprimido / 1e9:.2f} GB)")
