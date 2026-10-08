@@ -1,0 +1,4 @@
+anio,filas,nulos,negativos,cero,entre_0_y_tope,igual_tope,sobre_tope,minimo,maximo,media,mediana,p90,p99,minutos_sobre_tope,co2_t_bajo_si_se_incluyeran_sobre_tope
+2023,6847899,87272,0,0,6760615,3,9,1.0,269.0,17.4182,15.0,27.0,52.0,1834.0,34.8
+2024,7079061,95734,0,0,6983307,2,18,1.0,214.0,17.9045,15.0,28.0,55.0,3466.0,65.7
+2025,7001619,102183,0,0,6899407,2,27,1.0,1274.0,18.6465,16.0,30.0,61.0,9300.0,176.3
