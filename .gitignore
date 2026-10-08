@@ -24,6 +24,7 @@ __pycache__/
 venv/
 env/
 
+
 # Archivos temporales
 *.tmp
 *.log

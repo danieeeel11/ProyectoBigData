@@ -13,30 +13,6 @@ Antes, crea una variable del tablero:
 
 El CO2 del escenario alto es el doble del bajo. El orden de los aeropuertos no cambia, porque todos se multiplican por el mismo número.
 
-## 0. KPI — tramos y tiempo promedio por tramo (etiquetas)
-
-Si el tablero muestra el conteo **41.279.609**, el título debe ser exactamente:
-
-`Tramos de rodaje válidos (salidas + llegadas)`
-
-No usar “operaciones”, “vuelos” ni “vuelos únicos”. Ese número es `obs. salida válida + obs. llegada válida`.
-
-Si muestra **13,17**, el título debe ser:
-
-`Tiempo promedio por tramo de rodaje`
-
-Consulta de verificación (no cambia la magnitud):
-
-```sql
-SELECT
-  SUM(vuelos_salida) + SUM(vuelos_llegada) AS tramos_rodaje_validos,
-  ROUND(
-    (SUM(min_rodaje_salida) + SUM(min_rodaje_llegada))
-    / NULLIF(SUM(vuelos_salida) + SUM(vuelos_llegada), 0)
-  , 2) AS tiempo_promedio_por_tramo_min
-FROM co2_aeropuerto_mes;
-```
-
 ## 1. KPI — toneladas de CO2
 
 - Tipo: **Stat**
