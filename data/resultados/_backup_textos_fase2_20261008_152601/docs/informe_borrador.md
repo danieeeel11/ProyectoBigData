@@ -16,7 +16,7 @@ Bajar todo el rodaje un 10 % evitaría cerca de **1,03 millones de toneladas** e
 
 La pregunta es: ¿qué aeropuertos y qué franjas horarias desperdician más combustible rodando en tierra con los motores encendidos, y cuánto CO2 representa eso?
 
-El usuario es el área de Sostenibilidad, que necesita un número para un reporte y una lista corta de dónde actuar. La decisión no es predecir si un vuelo llegará tarde. Ese fue el enfoque anterior del grupo; sus notebooks quedan como apoyo. Aquí el resultado es una estimación de CO2 por rodaje y un orden de aeropuertos y horas.
+El usuario es el área de Sostenibilidad, que necesita un número para un reporte y una lista corta de dónde actuar. La decisión no es predecir si un vuelo llegará tarde. Ese fue el enfoque anterior del grupo; sus notebooks quedan como apoyo. Aquí el resultado es un inventario de CO2 y un orden de aeropuertos y horas.
 
 La unidad de análisis es el vuelo. `TaxiOut` (minutos desde el puesto hasta el despegue) se atribuye al aeropuerto de origen. `TaxiIn` (desde el aterrizaje hasta el puesto) se atribuye al de destino.
 
@@ -37,9 +37,7 @@ El modelo de "rodaje excesivo" queda opcional y no bloquea la entrega.
 
 La entrada son 36 ZIP de BTS, **1,05 GB** comprimidos y **9,47 GB** si se descomprimen. El Parquet tiene **20.928.579** filas y ocupa unos **664 MB**. No se perdieron filas en la conversión.
 
-Entran al total los vuelos con `TaxiOut` y `TaxiIn` no nulos y los dos menores o iguales a 180 minutos: **20.636.222**. Se dejan fuera 292.357 filas (1,4 %). Casi todas son nulos. Solo 54 salidas y 219 llegadas superan 180 minutos. Esos extremos se quedan guardados (el máximo es 1.274 min de salida y 1.318 de llegada); no se borran en silencio. Ningún vuelo cancelado queda en el conjunto válido. Sí quedan **48.343** desviados con ambos tiempos válidos (0,23 %).
-
-La verificación con `DivReachedDest` muestra que el `TaxiIn` válido de desviados (**48.347** casos) aparece solo cuando el vuelo alcanzó el destino programado; por eso `TaxiIn` se atribuye a `Dest` y no a `Div1Airport` (aeropuerto intermedio). Los **14** vuelos que alcanzaron `Dest` sin `TaxiIn` válido (3 nulos y 11 >180 min) quedan fuera de ese conteo; los **4.948** que no alcanzaron `Dest` no reportan `TaxiIn`. No se reatribuye geográficamente sin evidencia suficiente.
+Entran al total los vuelos con `TaxiOut` y `TaxiIn` no nulos y los dos menores o iguales a 180 minutos: **20.636.222**. Se dejan fuera 292.357 filas (1,4 %). Casi todas son nulos. Solo 54 salidas y 219 llegadas superan 180 minutos. Esos extremos se quedan guardados (el máximo es 1.274 min de salida y 1.318 de llegada); no se borran en silencio. Ningún vuelo cancelado queda en el conjunto válido. Sí quedan 48.343 desviados que traen ambos tiempos por debajo del tope; la regla de referencia no los quita.
 
 El detalle de bytes y filas está en `docs/volumenes_por_etapa.md`.
 
@@ -93,13 +91,11 @@ No se puede decir que el clima sea la causa única: un día de nieve también de
 
 Top 10 de CO2 de **salida**, escenario bajo, en toneladas: ORD 392.002, DFW 335.161, DEN 321.352, ATL 306.815, CLT 239.863, LGA 206.315, SEA 198.740, LAX 196.097, LAS 192.275, JFK 181.070.
 
-Supuestos que hay que dejar escritos: 6 kg/min y 12 kg/min son escenarios hipotéticos de sensibilidad, no tasas medidas por vuelo; 12 kg/min sigue marcado por validar con bases de motores; el factor 3,16 kg CO2/kg combustible corresponde al factor de ICAO para Jet-A/Jet-A1; EUROCONTROL usa 3,15 y esa diferencia no mueve el ranking. Las cifras son estimaciones a partir de duraciones de rodaje, no combustible ni CO2 medidos directamente.
-
-Escenarios de ahorro publicados (escenario bajo): reducir el rodaje un 10 % sobre el universo principal evita **1.030.363 t** estimadas; llevar la salida de aeropuertos grandes y lentos hasta la mediana (15,7 min) evita **1.007.869 t** en el cálculo publicado, que usa la población de salidas válidas. **Nota de sensibilidad:** si esa segunda intervención se recalcula exigiendo ambos tiempos válidos, el CO2 potencialmente evitado baja en **690 t (0,07 %)** respecto de 1.007.869 t y queda en **1.007.179 t**. Las dos intervenciones no deben sumarse. El recálculo productivo de `escenario_ahorro` queda pospuesto.
+Supuestos que hay que dejar escritos: 6 kg/min es una referencia de un A320, no el motor de cada vuelo; 12 kg/min está **por validar**; el empuje en rodaje varía (3 % a 10 %, frente al 7 % de OACI); EUROCONTROL usa 3,15 en lugar de 3,16 y esa diferencia no mueve el ranking.
 
 ## AWS y Grafana
 
-A la base solo entran las tablas agregadas. El script `scripts/subir_resultados_aws.py` lee el host y la clave desde `.env`, se puede correr otra vez si el laboratorio se reinicia, y tiene un `--dry-run` que no se conecta. La guía está en `docs/guia_aws_grafana.md`. Los paneles (total, top 10, hora, aeropuertos lentos y ahorro) están descritos en `docs/grafana_paneles.md`, con un JSON para importar. En el tablero, el indicador de **41.279.609** se denomina **Tramos de rodaje válidos (salidas + llegadas)**, no vuelos únicos; el promedio de **13,17 min** se denomina **Tiempo promedio por tramo de rodaje**. Esos tramos suman 371.426.727 min de salida y 172.172.838 min de llegada (543.599.565 min en total).
+A la base solo entran las tablas agregadas. El script `scripts/subir_resultados_aws.py` lee el host y la clave desde `.env`, se puede correr otra vez si el laboratorio se reinicia, y tiene un `--dry-run` que no se conecta. La guía está en `docs/guia_aws_grafana.md`. Los paneles (total, top 10, hora, aeropuertos lentos y ahorro) están descritos en `docs/grafana_paneles.md`, con un JSON para importar.
 
 ## Conclusiones
 
