@@ -35,8 +35,6 @@ Paso a paso para que **cualquier integrante del grupo** pueda clonar el repo, pr
 cd C:\Users\TU_USUARIO\Documents\Proyecto\ProyectoBigData
 ```
 
-(Sustituye la ruta por la tuya. En el equipo de Lina es `C:\Users\linam\Documents\Proyecto\ProyectoBigData`.)
-
 ### Opción B — Clonar desde GitHub
 
 1. Abre GitHub Desktop → **Clone repository**.
