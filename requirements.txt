@@ -16,3 +16,6 @@ scikit-learn==1.9.1
 nbformat==5.11.1
 nbclient==0.11.0
 ipykernel==7.3.0
+dash==4.4.1
+dash-bootstrap-components==2.0.4
+plotly==7.1.0
