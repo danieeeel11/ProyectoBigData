@@ -27,6 +27,7 @@ import os
 import sys
 import threading
 import time
+import webbrowser
 from pathlib import Path
 
 import duckdb
@@ -116,10 +117,17 @@ def ejecutar_benchmark(
     )
     client = Client(cluster)
     print(f"\nDashboard de Dask: {client.dashboard_link}")
+    try:
+        navegador_abierto = webbrowser.open_new_tab(client.dashboard_link)
+    except webbrowser.Error:
+        navegador_abierto = False
+    if navegador_abierto:
+        print("Dashboard abierto en el navegador.")
+    else:
+        print(f"No se pudo abrir el navegador automáticamente. Visita: {client.dashboard_link}")
 
     if pausa:
-        print("\nAbre ese enlace en el navegador y déjalo visible.")
-        input("Cuando lo tengas abierto, presiona ENTER para calcular...")
+        input("Cuando el dashboard esté visible, presiona ENTER para calcular...")
 
     import dask.dataframe as dd
 

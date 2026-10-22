@@ -230,13 +230,13 @@ Las dependencias de Dash, Dash Bootstrap Components y Plotly están incluidas en
 python main.py
 ```
 
-Selecciona **10. Desplegar dashboard local**. Alternativamente, ejecútalo directamente:
+Selecciona **10. Desplegar dashboard local**. Se abrirá una terminal nueva para ejecutar Dash, por lo que puedes seguir usando el menú original. Alternativamente, ejecútalo directamente:
 
 ```text
 python main.py dashboard
 ```
 
-Espera el mensaje de que el servidor está disponible y abre [http://127.0.0.1:8050](http://127.0.0.1:8050). El dashboard incluye las páginas **Resumen** y **Franjas horarias**, con filtros de año, tipo de rodaje y escenario de consumo. Mantén abierta la terminal mientras lo usas; para apagarlo, pulsa `Ctrl+C`. Si recalculas los CSV, reinicia el dashboard para volver a cargar los datos.
+Cuando Dash esté listo, se abrirá automáticamente el navegador en [http://127.0.0.1:8050](http://127.0.0.1:8050). El dashboard incluye las páginas **Resumen** y **Franjas horarias**, con filtros de año, tipo de rodaje y escenario de consumo. Mantén abierta la terminal nueva mientras lo usas; para apagarlo, pulsa `Ctrl+C` en esa terminal. Si recalculas los CSV, reinicia el dashboard para volver a cargar los datos.
 
 ---
 
@@ -246,13 +246,15 @@ Necesitas una terminal para el servidor y otra para ejecutar el flujo. Ambas deb
 
 ### Terminal del servidor (déjala abierta)
 
-Desde el menú principal, selecciona **5. Iniciar servidor Prefect**. Se abrirá una terminal nueva que ejecutará Prefect con el mismo intérprete de Python que está ejecutando `main.py`. Déjala abierta mientras uses Prefect.
+Desde el menú principal, selecciona **5. Iniciar servidor Prefect**. Se abrirá una terminal nueva que ejecutará Prefect con el mismo intérprete de Python que está ejecutando `main.py`. Cuando el servidor esté listo, se abrirá automáticamente el navegador en el tablero Prefect. Déjala abierta mientras uses Prefect.
 
 Si necesitas iniciarlo manualmente, abre una terminal en la raíz del proyecto, activa `bigdata` y ejecuta:
 
 ```text
 python -m prefect server start
 ```
+
+Si sale error "Something went wrong" intentar con prefect cloud logout en terminal
 
 Abre el navegador: [http://127.0.0.1:4200](http://127.0.0.1:4200). Si el comando del menú no abre una ventana en tu entorno, usa este método manual.
 
@@ -313,7 +315,7 @@ python scripts/benchmark_dask.py --pausa
 ```
 
 1. Copia el enlace que imprime (a veces no es el puerto 8787).
-2. Ábrelo en el navegador.
+2. El script abre ese enlace automáticamente en el navegador.
 3. Pulsa ENTER en la terminal para calcular.
 4. Captura el dashboard.
 5. Pulsa ENTER para cerrar esa configuración y pasar a la siguiente.

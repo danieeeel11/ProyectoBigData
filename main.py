@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Sequence
+from urllib.error import URLError
 
 RAIZ = Path(__file__).resolve().parent
 SCRIPTS = RAIZ / "scripts"
@@ -50,7 +51,13 @@ ACCIONES = {
 def ejecutar(accion: str, pausa: bool = False) -> int:
     """Ejecuta un script conservando la salida y el código de retorno."""
     if accion == "prefect-server":
-        return iniciar_prefect_en_terminal()
+        return iniciar_en_terminal(
+            "Servidor Prefect",
+            [sys.executable, "-m", "prefect", "server", "start"],
+            RAIZ,
+            "http://127.0.0.1:4200",
+            "python -m prefect server start",
+        )
     if accion == "dask":
         nombre = "Benchmark Dask"
         comando = [sys.executable, str(SCRIPTS / "benchmark_dask.py")]
@@ -58,9 +65,13 @@ def ejecutar(accion: str, pausa: bool = False) -> int:
             comando.append("--pausa")
         directorio = RAIZ
     elif accion == "dashboard":
-        nombre = "Desplegar dashboard local"
-        comando = [sys.executable, "app.py"]
-        directorio = RAIZ / "dashboard"
+        return iniciar_en_terminal(
+            "Dashboard local",
+            [sys.executable, "app.py"],
+            RAIZ / "dashboard",
+            "http://127.0.0.1:8050",
+            "python app.py (desde la carpeta dashboard)",
+        )
     else:
         nombre, comando = ACCIONES[accion]
         directorio = RAIZ
@@ -77,10 +88,15 @@ def ejecutar(accion: str, pausa: bool = False) -> int:
     return resultado.returncode
 
 
-def iniciar_prefect_en_terminal() -> int:
-    """Abre una terminal nueva y ejecuta Prefect con el Python actual."""
-    comando = [sys.executable, "-m", "prefect", "server", "start"]
-    comando_shell = f"cd {shlex.quote(str(RAIZ))} && {shlex.join(comando)}"
+def iniciar_en_terminal(
+    nombre: str,
+    comando: list[str],
+    directorio: Path,
+    url: str,
+    comando_manual: str,
+) -> int:
+    """Abre una terminal nueva y ejecuta un comando desde el directorio indicado."""
+    comando_shell = shlex.join(comando)
 
     if sys.platform == "darwin":
         comando_apple_script = (
@@ -89,17 +105,17 @@ def iniciar_prefect_en_terminal() -> int:
         launcher = [
             "osascript",
             "-e",
-            f'tell application "Terminal" to do script "{comando_apple_script}"',
+            f'tell application "Terminal" to do script "cd {shlex.quote(str(directorio))} && {comando_apple_script}"',
         ]
     elif os.name == "nt":
         launcher = [
             "cmd.exe",
             "/c",
             "start",
-            "Prefect server",
+            nombre,
             "cmd.exe",
             "/k",
-            subprocess.list2cmdline(comando),
+            f'cd /d "{directorio}" && {subprocess.list2cmdline(comando)}',
         ]
     else:
         terminales = (
@@ -117,20 +133,61 @@ def iniciar_prefect_en_terminal() -> int:
         if launcher is None:
             print(
                 "No encontré una aplicación de terminal compatible. "
-                "Ejecuta manualmente: python -m prefect server start",
+                f"Ejecuta manualmente desde {directorio}: {comando_manual}",
                 file=sys.stderr,
             )
             return 1
 
-    print("\n== Iniciando servidor Prefect en una terminal nueva ==\n", flush=True)
+    print(f"\n== Iniciando {nombre} en una terminal nueva ==\n", flush=True)
     try:
-        subprocess.Popen(launcher, cwd=RAIZ)
+        subprocess.Popen(launcher, cwd=directorio)
     except OSError as error:
-        print(f"No se pudo abrir una terminal para Prefect: {error}", file=sys.stderr)
+        print(f"No se pudo abrir una terminal para {nombre}: {error}", file=sys.stderr)
         return 1
 
-    print("Prefect se ejecuta en la nueva terminal. Tablero: http://127.0.0.1:4200")
+    try:
+        abrir_navegador_cuando_disponible(url)
+    except OSError as error:
+        print(f"No se pudo programar la apertura del navegador: {error}", file=sys.stderr)
+        print(f"Abre manualmente: {url}")
+        return 1
+
+    print(f"{nombre} se ejecuta en la nueva terminal; se abrirá {url} cuando esté disponible.")
     return 0
+
+
+def abrir_navegador_cuando_disponible(url: str) -> None:
+    """Espera en un proceso separado a que un servicio local responda y abre su URL."""
+    codigo = """
+import sys
+import time
+import webbrowser
+from urllib.error import URLError
+from urllib.request import urlopen
+
+url = sys.argv[1]
+limite = time.monotonic() + 120
+while time.monotonic() < limite:
+    try:
+        with urlopen(url, timeout=2):
+            webbrowser.open_new_tab(url)
+        break
+    except (URLError, TimeoutError):
+        time.sleep(1)
+"""
+    opciones = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if os.name == "nt":
+        opciones["creationflags"] = (
+            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        )
+    else:
+        opciones["start_new_session"] = True
+
+    subprocess.Popen([sys.executable, "-c", codigo, url], **opciones)
 
 
 def mostrar_menu() -> int:

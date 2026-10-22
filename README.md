@@ -58,7 +58,7 @@ python main.py dashboard
 python main.py aws-check
 ```
 
-El dashboard Dash se abre en http://127.0.0.1:8050 y lee los CSV existentes en `data/resultados/`. Déjalo ejecutándose mientras lo consultas; para detenerlo, vuelve a la terminal y pulsa `Ctrl+C`.
+La opción de dashboard abre una terminal nueva, inicia Dash y permite que el menú siga disponible. Cuando el servidor esté listo, el navegador abre automáticamente http://127.0.0.1:8050. El dashboard lee los CSV existentes en `data/resultados/`. Déjalo ejecutándose mientras lo consultas; para detenerlo, vuelve a su terminal y pulsa `Ctrl+C`.
 
 El orden recomendado es:
 
