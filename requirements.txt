@@ -1,4 +1,4 @@
-# Versiones del ambiente conda "bigdata" (Python 3.11), revisadas el 6 de octubre de 2026.
+# Versiones del ambiente conda 
 pandas==3.0.6
 numpy==2.4.6
 pyarrow==25.0.1
