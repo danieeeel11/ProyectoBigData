@@ -2,6 +2,7 @@
 
 Proyecto de Big Data, Maestría en Analítica Aplicada, Universidad de La Sabana.
 
+
 **Pregunta:** ¿Qué aeropuertos y qué franjas horarias desperdician más combustible rodando en tierra con los motores encendidos, y cuánto CO2 representa eso?
 
 **Quién lo usa:** Sostenibilidad de una aerolínea o de un aeropuerto.
@@ -39,30 +40,48 @@ Los ZIP, el Parquet y el archivo `.env` no se suben. Sí se suben los CSV peque�
 
 ## Orden para correrlo
 
-Abre **Anaconda Prompt**, no PowerShell. `conda` no funciona en la terminal de Cursor.
+Abre **Anaconda Prompt**, no PowerShell. `conda` no funciona en la terminal de Cursor. Para ejecutar las etapas desde un único punto de entrada, activa el ambiente, entra a la carpeta del proyecto y abre el menú:
 
 ```
-cd C:\Users\linam\Documents\Proyecto\ProyectoBigData
+cd RUTA\DEL\ProyectoBigData
 conda activate bigdata
+python main.py
 ```
 
-1. Medir la entrada (tiene que decir 9,47 GB y que cumple 1,5 GB):
+El menú permite ejecutar ingesta, clima, medición de volumen, cálculo, servidor Prefect, benchmark Dask y tareas de AWS/auditoría. También puedes lanzar una etapa directamente, por ejemplo:
 
 ```
-python scripts/medir_volumen_entrada.py
+python main.py volumen
+python main.py calcular
+python main.py dask --pausa
+python main.py aws-check
 ```
 
-2. Calcular CO2 y comprobar las cifras de referencia. Si algo no cuadra, el script se detiene:
+El orden recomendado es:
+
+1. Si faltan datos, ingesta BTS. Esto descarga los meses faltantes, crea Parquet y recalcula CO2:
 
 ```
-python scripts/calcular_co2.py
+python main.py ingesta
 ```
 
-3. Notebook (en Cursor: Ctrl+Shift+P → Python: Select Interpreter → el ambiente `bigdata`). Ábrelo y recórrelo; ya está ejecutado:
+2. Medir la entrada (tiene que decir 9,47 GB y que cumple 1,5 GB):
+
+```
+python main.py volumen
+```
+
+3. Calcular CO2 y comprobar las cifras de referencia. Si algo no cuadra, el script se detiene:
+
+```
+python main.py calcular
+```
+
+4. Notebook (en Cursor: Ctrl+Shift+P → Python: Select Interpreter → el ambiente `bigdata`). Ábrelo y recórrelo; ya está ejecutado:
 
 `notebooks/eda_rodaje_co2.ipynb`
 
-4. Prefect. Terminal 1, déjala abierta:
+5. Prefect. Terminal 1, déjala abierta:
 
 ```
 prefect server start
@@ -84,7 +103,7 @@ python -c "import sys; sys.path.insert(0, 'scripts'); from flujo_ingesta_prefect
 
 En el log tienen que aparecer "ZIP corrupto" y "esquema sin TaxiOut/TaxiIn", y el flujo debe terminar bien. No borra el Parquet.
 
-5. Dask. Cierra otros programas si la RAM está justa. Para capturar el dashboard, agrega `--pausa`:
+6. Dask. Cierra otros programas si la RAM está justa. Para capturar el dashboard, agrega `--pausa`:
 
 ```
 python scripts/benchmark_dask.py --pausa
@@ -92,7 +111,7 @@ python scripts/benchmark_dask.py --pausa
 
 Sin `--pausa` corre las dos configuraciones y guarda `data/resultados/benchmark_dask.csv`. En la corrida del 6 de octubre, A tardó 5,1 s y B tardó 9,6 s. Las dos sumaron 7.042.250,7 t de CO2 de salida, igual que DuckDB. Ese número no es el total de 10,3 millones: el total también suma la llegada. La configuración C solo entra si hay al menos 8 GB libres. Si el enlace del dashboard no es el puerto 8787, usa el que imprime el script.
 
-6. AWS y Grafana, cuando tengas el laboratorio abierto. Paso a paso: `docs/guia_aws_grafana.md`. Consultas de los paneles: `docs/grafana_paneles.md`.
+7. AWS y Grafana, cuando tengas el laboratorio abierto. Paso a paso: `docs/guia_aws_grafana.md`. Consultas de los paneles: `docs/grafana_paneles.md`.
 
 ```
 copy .env.example .env
@@ -104,6 +123,7 @@ python scripts/subir_resultados_aws.py
 
 ```
 config.py                          parámetros (consumo, factor, tope, rutas)
+main.py                            menú y punto de entrada para ejecutar etapas
 notebooks/eda_rodaje_co2.ipynb     EDA del rodaje, ya ejecutado
 scripts/calcular_co2.py            agregados y pruebas de exactitud
 scripts/flujo_ingesta_prefect.py   descarga, Parquet, CO2, fallo controlado

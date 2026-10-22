@@ -47,6 +47,7 @@ cd RUTA\DEL\ProyectoBigData
 
 Comprueba que existan, entre otros:
 
+- `main.py`
 - `config.py`
 - `scripts/calcular_co2.py`
 - `scripts/flujo_ingesta_prefect.py`
@@ -86,6 +87,26 @@ Comprueba:
 ```text
 python -c "import pandas, duckdb, dask, prefect, sqlalchemy; print('OK')"
 ```
+
+## 2.1 Punto de entrada del proyecto
+
+Desde la raíz del proyecto, abre el menú interactivo:
+
+```text
+python main.py
+```
+
+También puedes ejecutar una etapa concreta sin abrir el menú:
+
+```text
+python main.py ingesta
+python main.py volumen
+python main.py calcular
+python main.py dask --pausa
+python main.py aws-check
+```
+
+El menú llama a los scripts de `scripts/` y los ejecuta desde la raíz del proyecto. Así se conservan sus rutas de datos y también puedes seguir ejecutando los comandos individuales descritos en esta guía.
 
 ---
 
@@ -390,6 +411,8 @@ Salidas en `data/resultados/auditoria/`. Documentación en `docs/auditoria/`.
 ---
 
 ## 12. Orden recomendado en una sola tarde
+
+Para ejecutar las etapas de procesamiento desde el menú, usa `python main.py` y selecciona cada opción siguiendo el orden de esta tabla. Prefect y Grafana tienen pasos manuales que siguen requiriendo sus propias ventanas/tableros.
 
 | Orden | Comando / acción | Tiempo aprox. |
 |---:|---|---|
