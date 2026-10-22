@@ -84,13 +84,13 @@ python main.py calcular
 
 `notebooks/eda_rodaje_co2.ipynb`
 
-5. Prefect. Terminal 1, déjala abierta:
+5. Prefect. En el menú, selecciona **5. Iniciar servidor Prefect**; se abrirá una terminal nueva. Déjala abierta. También puedes iniciarlo manualmente:
 
 ```
-prefect server start
+python -m prefect server start
 ```
 
-Terminal 2:
+Abre http://127.0.0.1:4200. En otra terminal corre el flujo:
 
 ```
 python scripts/flujo_ingesta_prefect.py

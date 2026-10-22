@@ -242,19 +242,21 @@ Espera el mensaje de que el servidor está disponible y abre [http://127.0.0.1:8
 
 ## 7. Prefect (flujo recurrente)
 
-Necesitas **dos** ventanas de Anaconda Prompt, ambas en la carpeta del proyecto con `conda activate bigdata`.
+Necesitas una terminal para el servidor y otra para ejecutar el flujo. Ambas deben usar el ambiente `bigdata`.
 
-### Terminal 1 — servidor (déjala abierta)
+### Terminal del servidor (déjala abierta)
+
+Desde el menú principal, selecciona **5. Iniciar servidor Prefect**. Se abrirá una terminal nueva que ejecutará Prefect con el mismo intérprete de Python que está ejecutando `main.py`. Déjala abierta mientras uses Prefect.
+
+Si necesitas iniciarlo manualmente, abre una terminal en la raíz del proyecto, activa `bigdata` y ejecuta:
 
 ```text
-cd RUTA\DEL\ProyectoBigData
-conda activate bigdata
-prefect server start
+python -m prefect server start
 ```
 
-Abre el navegador: [http://127.0.0.1:4200](http://127.0.0.1:4200)
+Abre el navegador: [http://127.0.0.1:4200](http://127.0.0.1:4200). Si el comando del menú no abre una ventana en tu entorno, usa este método manual.
 
-### Terminal 2 — corrida normal
+### Otra terminal — corrida normal
 
 ```text
 cd RUTA\DEL\ProyectoBigData

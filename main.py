@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import os
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -46,6 +49,8 @@ ACCIONES = {
 
 def ejecutar(accion: str, pausa: bool = False) -> int:
     """Ejecuta un script conservando la salida y el código de retorno."""
+    if accion == "prefect-server":
+        return iniciar_prefect_en_terminal()
     if accion == "dask":
         nombre = "Benchmark Dask"
         comando = [sys.executable, str(SCRIPTS / "benchmark_dask.py")]
@@ -70,6 +75,62 @@ def ejecutar(accion: str, pausa: bool = False) -> int:
     if resultado.returncode:
         print(f"\nLa etapa terminó con código {resultado.returncode}.", file=sys.stderr)
     return resultado.returncode
+
+
+def iniciar_prefect_en_terminal() -> int:
+    """Abre una terminal nueva y ejecuta Prefect con el Python actual."""
+    comando = [sys.executable, "-m", "prefect", "server", "start"]
+    comando_shell = f"cd {shlex.quote(str(RAIZ))} && {shlex.join(comando)}"
+
+    if sys.platform == "darwin":
+        comando_apple_script = (
+            comando_shell.replace("\\", "\\\\").replace('"', '\\"')
+        )
+        launcher = [
+            "osascript",
+            "-e",
+            f'tell application "Terminal" to do script "{comando_apple_script}"',
+        ]
+    elif os.name == "nt":
+        launcher = [
+            "cmd.exe",
+            "/c",
+            "start",
+            "Prefect server",
+            "cmd.exe",
+            "/k",
+            subprocess.list2cmdline(comando),
+        ]
+    else:
+        terminales = (
+            ("x-terminal-emulator", ["-e", "sh", "-lc", comando_shell]),
+            ("gnome-terminal", ["--", "sh", "-lc", comando_shell]),
+            ("konsole", ["-e", "sh", "-lc", comando_shell]),
+            ("xterm", ["-e", "sh", "-lc", comando_shell]),
+        )
+        launcher = None
+        for terminal, argumentos in terminales:
+            ejecutable = shutil.which(terminal)
+            if ejecutable:
+                launcher = [ejecutable, *argumentos]
+                break
+        if launcher is None:
+            print(
+                "No encontré una aplicación de terminal compatible. "
+                "Ejecuta manualmente: python -m prefect server start",
+                file=sys.stderr,
+            )
+            return 1
+
+    print("\n== Iniciando servidor Prefect en una terminal nueva ==\n", flush=True)
+    try:
+        subprocess.Popen(launcher, cwd=RAIZ)
+    except OSError as error:
+        print(f"No se pudo abrir una terminal para Prefect: {error}", file=sys.stderr)
+        return 1
+
+    print("Prefect se ejecuta en la nueva terminal. Tablero: http://127.0.0.1:4200")
+    return 0
 
 
 def mostrar_menu() -> int:
