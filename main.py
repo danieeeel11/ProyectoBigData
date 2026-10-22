@@ -51,12 +51,18 @@ def ejecutar(accion: str, pausa: bool = False) -> int:
         comando = [sys.executable, str(SCRIPTS / "benchmark_dask.py")]
         if pausa:
             comando.append("--pausa")
+        directorio = RAIZ
+    elif accion == "dashboard":
+        nombre = "Desplegar dashboard local"
+        comando = [sys.executable, "app.py"]
+        directorio = RAIZ / "dashboard"
     else:
         nombre, comando = ACCIONES[accion]
+        directorio = RAIZ
 
     print(f"\n== {nombre} ==\n", flush=True)
     try:
-        resultado = subprocess.run(comando, cwd=RAIZ, check=False)
+        resultado = subprocess.run(comando, cwd=directorio, check=False)
     except FileNotFoundError as error:
         print(f"No se pudo iniciar {nombre}: {error}", file=sys.stderr)
         return 1
@@ -77,6 +83,7 @@ def mostrar_menu() -> int:
         ("7", "Validar CSV para AWS (dry-run)", "aws-check"),
         ("8", "Subir resultados agregados a AWS", "aws-upload"),
         ("9", "Auditoría de calidad (solo lectura)", "auditoria"),
+        ("10", "Desplegar dashboard local", "dashboard"),
     ]
 
     while True:
@@ -110,13 +117,14 @@ def mostrar_menu() -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', str(RAIZ / "requirements.txt")])
     parser = argparse.ArgumentParser(
         description="Menú y comandos para ejecutar las etapas del proyecto."
     )
     parser.add_argument(
         "accion",
         nargs="?",
-        choices=[*ACCIONES, "dask"],
+        choices=[*ACCIONES, "dask", "dashboard"],
         help="Etapa a ejecutar; si se omite, se abre el menú interactivo.",
     )
     parser.add_argument(

@@ -48,14 +48,17 @@ conda activate bigdata
 python main.py
 ```
 
-El menú permite ejecutar ingesta, clima, medición de volumen, cálculo, servidor Prefect, benchmark Dask y tareas de AWS/auditoría. También puedes lanzar una etapa directamente, por ejemplo:
+El menú permite ejecutar ingesta, clima, medición de volumen, cálculo, servidor Prefect, benchmark Dask, despliegue del dashboard local y tareas de AWS/auditoría. También puedes lanzar una etapa directamente, por ejemplo:
 
 ```
 python main.py volumen
 python main.py calcular
 python main.py dask --pausa
+python main.py dashboard
 python main.py aws-check
 ```
+
+El dashboard Dash se abre en http://127.0.0.1:8050 y lee los CSV existentes en `data/resultados/`. Déjalo ejecutándose mientras lo consultas; para detenerlo, vuelve a la terminal y pulsa `Ctrl+C`.
 
 El orden recomendado es:
 
@@ -131,6 +134,7 @@ scripts/benchmark_dask.py          dos configuraciones de workers y memoria
 scripts/subir_resultados_aws.py    solo tablas de resultados, credenciales en .env
 scripts/medir_volumen_entrada.py   1,05 GB y 9,47 GB
 scripts/descargar_clima_openmeteo.py
+dashboard/                          dashboard Dash; ejecutar con `python main.py dashboard`
 docs/                              guía AWS, paneles, volúmenes, informe, registro de IA
 ```
 

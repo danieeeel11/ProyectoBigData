@@ -21,6 +21,7 @@ Paso a paso para que **cualquier integrante del grupo** pueda clonar el repo, pr
 9. Dask (2 configuraciones)
 10. AWS RDS (solo tablas agregadas)
 11. Grafana (paneles gerenciales)
+12. Dashboard Dash local
 ```
 
 **Nunca subas a GitHub ni a AWS:** ZIP, CSV crudos de BTS, Parquet por vuelo, ni el archivo `.env`.
@@ -103,10 +104,11 @@ python main.py ingesta
 python main.py volumen
 python main.py calcular
 python main.py dask --pausa
+python main.py dashboard
 python main.py aws-check
 ```
 
-El menú llama a los scripts de `scripts/` y los ejecuta desde la raíz del proyecto. Así se conservan sus rutas de datos y también puedes seguir ejecutando los comandos individuales descritos en esta guía.
+El menú llama a los scripts de `scripts/` desde la raíz del proyecto. El dashboard se ejecuta desde su carpeta `dashboard/` para cargar correctamente sus páginas y servicios. Así se conservan las rutas y también puedes seguir ejecutando los comandos individuales descritos en esta guía.
 
 ---
 
@@ -210,6 +212,31 @@ Archivos generados (entre otros):
 4. Ejecuta todas las celdas (**Run All**).
 
 Debe mostrar la tabla esperado vs obtenido en `True` y las gráficas de rodaje/CO₂.
+
+---
+
+## 6.1 Dashboard interactivo local
+
+El dashboard de `dashboard/` muestra los resultados agregados ya calculados; no vuelve a procesar los Parquet. Antes de abrirlo, confirma que existen estos archivos en `data/resultados/`:
+
+- `co2_aeropuerto_mes.csv`
+- `co2_aeropuerto_hora.csv`
+- `rodaje_clima.csv`
+- `escenario_ahorro.csv`
+
+Las dependencias de Dash, Dash Bootstrap Components y Plotly están incluidas en `requirements.txt`. Con el ambiente `bigdata` activo y desde la raíz del proyecto, puedes iniciarlo desde el menú:
+
+```text
+python main.py
+```
+
+Selecciona **10. Desplegar dashboard local**. Alternativamente, ejecútalo directamente:
+
+```text
+python main.py dashboard
+```
+
+Espera el mensaje de que el servidor está disponible y abre [http://127.0.0.1:8050](http://127.0.0.1:8050). El dashboard incluye las páginas **Resumen** y **Franjas horarias**, con filtros de año, tipo de rodaje y escenario de consumo. Mantén abierta la terminal mientras lo usas; para apagarlo, pulsa `Ctrl+C`. Si recalculas los CSV, reinicia el dashboard para volver a cargar los datos.
 
 ---
 
@@ -424,7 +451,8 @@ Para ejecutar las etapas de procesamiento desde el menú, usa `python main.py` y
 | 6 | Prefect server + flujo + fallo controlado | 10–15 min + capturas |
 | 7 | `python scripts/benchmark_dask.py --pausa` | 10–15 min + capturas |
 | 8 | AWS Lab + `.env` + `subir_resultados_aws.py` | 30–45 min |
-| 9 | Grafana conectar + paneles + capturas | 30–60 min |
+| 9 | `python main.py dashboard` (dashboard local) | 1–2 min |
+| 10 | Grafana conectar + paneles + capturas | 30–60 min |
 
 **AWS + Grafana:** hazlos en la misma sesión de Academy (4 h).
 
